@@ -5,6 +5,8 @@ img = cv2.imread('img/img4.jpg')
 
 sc = SeamCarving(img)
 
-result = sc.gen_emap()
-cv2.imwrite('result/result4.jpg', result)
+emap = sc.gen_emap()
+smap = sc.gen_smap(emap)
+cv2.imwrite('result/emap4.jpg', emap)
+cv2.imwrite('result/smap4.jpg', smap)
 
