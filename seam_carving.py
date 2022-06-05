@@ -251,7 +251,7 @@ class SeamCarving:
         h, w = self.img.shape[0:2]
         temp_img = 0
         if self.isgray:
-            temp_img = cv2.resize(self.img, (w//2, h//2))
+            temp_img = cv2.cvtColor(cv2.resize(self.img, (w//2, h//2)), cv2.COLOR_GRAY2RGB)
         else:
             temp_img = cv2.cvtColor(cv2.resize(self.img, (w//2, h//2)), cv2.COLOR_BGR2RGB)
         rotated_img = np.rot90(temp_img)
