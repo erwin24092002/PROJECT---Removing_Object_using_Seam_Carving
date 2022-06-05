@@ -138,9 +138,18 @@ class SeamCarving:
     @jit
     def remove_object(self, removal_mask):
         self.mask = removal_mask.copy()
+        
+        rotate_flag = False
         dmask = len(set(np.where(self.mask.T==255)[0]))
+        if dmask > len(set(np.where(self.mask==255)[0])):
+            dmask = len(set(np.where(self.mask==255)[0]))
+            rotate_flag = True
         
         # Removing Object
+        if rotate_flag: 
+            self.new_img = imutils.rotate_bound(self.new_img, angle=90)
+            self.mask = imutils.rotate_bound(self.mask, angle=90)
+            
         for step in tqdm(range(dmask), desc='Removing Object'):
             emap = self.gen_emap()
             emap = np.where((self.mask==255), -1000, emap)
@@ -154,6 +163,8 @@ class SeamCarving:
                 new_mask[row, col:] = self.mask[row, col+1:]
             self.mask = new_mask
             self.sliders.append(self.visual_seam(seam, color=REMOVAL_SEAM_COLOR))
+            if rotate_flag:
+                self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
             self.new_img = self.remove_seam(seam)
         
         # Regaining orginal size    
@@ -170,8 +181,14 @@ class SeamCarving:
             seam = seam_record.pop(0)
             self.new_img = self.insert_seam(seam)
             self.sliders.append(self.visual_seam(seam, color=INSERTED_SEAM_COLOR))
+            if rotate_flag:
+                self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
             seam_record = self.update_seam_record(seam_record, seam)
-            
+        
+        if rotate_flag: 
+            self.new_img = imutils.rotate_bound(self.new_img, angle=-90)
+            self.mask = imutils.rotate_bound(self.mask, angle=-90)
+        
         return self.new_img.copy()
     
     @jit
