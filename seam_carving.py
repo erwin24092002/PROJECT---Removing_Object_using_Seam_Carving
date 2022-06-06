@@ -44,12 +44,7 @@ class SeamCarving:
         smap = emap.copy()
         for row in range(1, h):
             for col in range(0, w):
-                if col == 0:
-                    smap[row, col] = min(smap[row-1, col:col+2]) + smap[row, col]
-                elif col == w-1:
-                    smap[row, col] = min(smap[row-1, col-1:col+1]) + smap[row, col]
-                else: 
-                    smap[row, col] = min(smap[row-1, col-1:col+2]) + smap[row, col]
+                smap[row, col] = min(smap[row-1, max(0, col-1):min(col+2, w)]) + smap[row, col]
         return smap
 
     @jit
@@ -68,12 +63,7 @@ class SeamCarving:
         h, w = smap.shape
         index = np.argmin(smap[h-1, :])
         for row in range(h-1, -1, -1):
-            if index == 0:
-                index = index + np.argmin(smap[row, index:index+2])
-            elif index == w-1:
-                index = index - 1 +  np.argmin(smap[row, index-1:index+1])
-            else: 
-                index = index - 1 + np.argmin(smap[row, index-1:index+2])
+            index = index - 1 + np.argmin(smap[row, max(0,index-1):min(index+2, w)])
             seam.append(index)
         return np.array(seam)[::-1]
     
@@ -86,20 +76,16 @@ class SeamCarving:
             arr(h x w x c) - an image with the deleted seam 
         """
         h, w = self.new_img.shape[0:2]
+        new_img = 0
         if self.isgray:
             new_img = np.zeros(shape=(h, w-1))
-            for row in range(0, h):
-                col = seam[row]
-                new_img[row, :col] = self.new_img[row, :col]
-                new_img[row, col:] = self.new_img[row, col+1:]
-            return new_img.astype(np.uint8)
         else: 
             new_img = np.zeros(shape=(h, w-1, 3))
-            for row in range(0, h):
-                col = seam[row]
-                new_img[row, :col, :] = self.new_img[row, :col, :]
-                new_img[row, col:, :] = self.new_img[row, col+1:, :]
-            return new_img.astype(np.uint8)
+        for row in range(0, h):
+            col = seam[row]
+            new_img[row, :col] = self.new_img[row, :col]
+            new_img[row, col:] = self.new_img[row, col+1:]
+        return new_img.astype(np.uint8)
     
     @jit
     def insert_seam(self, seam):
@@ -110,30 +96,21 @@ class SeamCarving:
             arr(h x w x c) - an image with the inserted seam 
         """
         h, w = self.new_img.shape[0:2] 
+        new_img = 0
         if self.isgray:
             new_img = np.zeros(shape=(h, w+1))
-            for row in range(0, h):
-                col = seam[row]
-                new_img[row, :col] = self.new_img[row, :col]
-                new_img[row, col+1:] = self.new_img[row, col:]
-                if col == 0:
-                    new_img[row, col] = new_img[row, col+1]
-                else:
-                    new_img[row, col] = (new_img[row, col-1].astype(np.int32)
-                                            + new_img[row, col+1].astype(np.int32)) / 2
-            return new_img.astype(np.uint8)
-        else:
+        else: 
             new_img = np.zeros(shape=(h, w+1, 3))
-            for row in range(0, h):
-                col = seam[row]
-                new_img[row, :col, :] = self.new_img[row, :col, :]
-                new_img[row, col+1:, :] = self.new_img[row, col:, :]
-                if col == 0:
-                    new_img[row, col, :] = new_img[row, col+1, :]
-                else:
-                    new_img[row, col, :] = (new_img[row, col-1, :].astype(np.int32)
-                                            + new_img[row, col+1, :].astype(np.int32)) / 2
-            return new_img.astype(np.uint8)
+        for row in range(0, h):
+            col = seam[row]
+            new_img[row, :col] = self.new_img[row, :col]
+            new_img[row, col+1:] = self.new_img[row, col:]
+            if col == 0:
+                new_img[row, col] = new_img[row, col+1]
+            else:
+                new_img[row, col] = (new_img[row, col-1].astype(np.int32)
+                                        + new_img[row, col+1].astype(np.int32)) / 2
+        return new_img.astype(np.uint8)
         
     @jit
     def remove_object(self, removal_mask):
