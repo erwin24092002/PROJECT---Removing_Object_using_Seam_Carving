@@ -63,7 +63,10 @@ class SeamCarving:
         h, w = smap.shape
         index = np.argmin(smap[h-1, :])
         for row in range(h-1, -1, -1):
-            index = index - 1 + np.argmin(smap[row, max(0,index-1):min(index+2, w)])
+            if index == 0:
+                index = np.argmin(smap[row, :2])
+            else: 
+                index = index - 1 + np.argmin(smap[row, max(0,index-1):min(index+2, w)])
             seam.append(index)
         return np.array(seam)[::-1]
     
@@ -86,6 +89,16 @@ class SeamCarving:
             new_img[row, :col] = self.new_img[row, :col]
             new_img[row, col:] = self.new_img[row, col+1:]
         return new_img.astype(np.uint8)
+    
+    @jit
+    def remove_seam_on_mask(self, seam, mask):
+        h, w = mask.shape 
+        new_mask = np.zeros(shape=(h, w-1))
+        for row in range(0, h):
+            col = seam[row]
+            new_mask[row, :col] = mask[row, :col]
+            new_mask[row, col:] = mask[row, col+1:]
+        return new_mask
     
     @jit
     def insert_seam(self, seam):
@@ -113,45 +126,52 @@ class SeamCarving:
         return new_img.astype(np.uint8)
         
     @jit
-    def remove_object(self, removal_mask):
-        self.mask = removal_mask.copy()
+    def remove_object(self, removal_mask, protective_mask=None):
+        self.removal_mask = removal_mask.copy()
+        if protective_mask is not None:
+            self.protective_mask = protective_mask.copy()
         
         rotate_flag = False
-        dmask = len(set(np.where(self.mask.T==255)[0]))
-        if dmask > len(set(np.where(self.mask==255)[0])):
-            dmask = len(set(np.where(self.mask==255)[0]))
+        dmask_w = len(set(np.where(self.removal_mask.T==255)[0]))
+        dmask_h = len(set(np.where(self.removal_mask==255)[0]))
+        dmask = dmask_w
+        if dmask_h < dmask_w:
+            dmask = dmask_h
             rotate_flag = True
         
         # Removing Object
         if rotate_flag: 
             self.new_img = imutils.rotate_bound(self.new_img, angle=90)
-            self.mask = imutils.rotate_bound(self.mask, angle=90)
+            self.removal_mask = imutils.rotate_bound(self.removal_mask, angle=90)
+            if protective_mask is not None:
+                self.protective_mask = imutils.rotate_bound(self.protective_mask, angle=90)
             
         for step in tqdm(range(dmask), desc='Removing Object'):
             emap = self.gen_emap()
-            emap = np.where((self.mask==255), -1000, emap)
+            if protective_mask is not None:
+                emap = np.where((self.protective_mask==255), 1000, emap)
+            emap = np.where((self.removal_mask==255), -1000, emap)
             seam = self.get_minimum_seam(emap)
-            
-            h, w = self.mask.shape 
-            new_mask = np.zeros(shape=(h, w-1))
-            for row in range(0, h):
-                col = seam[row]
-                new_mask[row, :col] = self.mask[row, :col]
-                new_mask[row, col:] = self.mask[row, col+1:]
-            self.mask = new_mask
             self.sliders.append(self.visual_seam(seam, color=REMOVAL_SEAM_COLOR))
             if rotate_flag:
                 self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
             self.new_img = self.remove_seam(seam)
+            self.removal_mask = self.remove_seam_on_mask(seam, self.removal_mask)
+            if protective_mask is not None:
+                self.protective_mask = self.remove_seam_on_mask(seam, self.protective_mask)
         
         # Regaining orginal size    
         temp_img = self.new_img.copy()
         seam_record = []
-        for step in range(dmask):
+        for step in tqdm(range(dmask), desc='Colecting Seams for Insertion'):
             emap = self.gen_emap()
+            if protective_mask is not None:
+                emap = np.where((self.protective_mask==255), 1000, emap)
             seam = self.get_minimum_seam(emap)
             seam_record.append(seam)
             self.new_img = self.remove_seam(seam)
+            if protective_mask is not None:
+                self.protective_mask = self.remove_seam_on_mask(seam, self.protective_mask)
             
         self.new_img = temp_img.copy()
         for step in tqdm(range(dmask), desc='Regaining Original Size'):
@@ -164,7 +184,6 @@ class SeamCarving:
         
         if rotate_flag: 
             self.new_img = imutils.rotate_bound(self.new_img, angle=-90)
-            self.mask = imutils.rotate_bound(self.mask, angle=-90)
         
         return self.new_img.copy()
     
@@ -192,7 +211,6 @@ class SeamCarving:
             new_img[row, seam[row]] = color
         return new_img.astype(np.uint8)
     
-    @jit
     def visual_process(self, save_path=''):
         """
         Input:
