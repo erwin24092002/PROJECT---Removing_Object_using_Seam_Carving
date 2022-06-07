@@ -17,6 +17,9 @@ class SeamCarving:
         self.new_img = img.copy() 
         self.isgray = len(img.shape) == 2
         self.sliders = []  
+        self.kernel_x = np.array([[0., 0., 0.], [-1., 0., 1.], [0., 0., 0.]], dtype=np.float64)
+        self.kernel_y_left = np.array([[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]], dtype=np.float64)
+        self.kernel_y_right = np.array([[0., 0., 0.], [1., 0., 0.], [0., -1., 0.]], dtype=np.float64)
     
     @jit
     def gen_emap(self):
@@ -33,19 +36,52 @@ class SeamCarving:
             return np.sqrt(np.sum(Gx**2, axis=2) + np.sum(Gy**2, axis=2))
 
     @jit
-    def gen_smap(self, emap):
+    def calc_backward_emap(self, emap):
         """Generate an seam map from energy map
         Args:
             np.array(h, w): an energy map
         Returns:
-            np.array(h, w): an seam map (smap) of input energy map 
+            np.array(h, w): an seam map (bemap) of input energy map 
         """ 
         h, w = emap.shape 
-        smap = emap.copy()
+        bemap = emap.copy()
         for row in range(1, h):
             for col in range(0, w):
-                smap[row, col] = min(smap[row-1, max(0, col-1):min(col+2, w)]) + smap[row, col]
-        return smap
+                bemap[row, col] = min(bemap[row-1, max(0, col-1):min(col+2, w)]) + bemap[row, col]
+        return bemap
+
+    @jit
+    def calc_forward_emap(self, emap):
+        matrix_x = self.calc_neighbor_matrix(self.kernel_x)
+        matrix_y_left = self.calc_neighbor_matrix(self.kernel_y_left)
+        matrix_y_right = self.calc_neighbor_matrix(self.kernel_y_right)
+
+        h, w = emap.shape
+        femap = emap.copy()
+        for row in range(1, h):
+            for col in range(w):
+                if col == 0:
+                    e_right = femap[row - 1, col + 1] + matrix_x[row - 1, col + 1] + matrix_y_right[row - 1, col + 1]
+                    e_up = femap[row - 1, col] + matrix_x[row - 1, col]
+                    femap[row, col] = emap[row, col] + min(e_right, e_up)
+                elif col == w - 1:
+                    e_left = femap[row - 1, col - 1] + matrix_x[row - 1, col - 1] + matrix_y_left[row - 1, col - 1]
+                    e_up = femap[row - 1, col] + matrix_x[row - 1, col]
+                    femap[row, col] = emap[row, col] + min(e_left, e_up)
+                else:
+                    e_left = femap[row - 1, col - 1] + matrix_x[row - 1, col - 1] + matrix_y_left[row - 1, col - 1]
+                    e_right = femap[row - 1, col + 1] + matrix_x[row - 1, col + 1] + matrix_y_right[row - 1, col + 1]
+                    e_up = femap[row - 1, col] + matrix_x[row - 1, col]
+                    femap[row, col] = emap[row, col] + min(e_left, e_right, e_up)
+        return femap
+    
+    @jit
+    def calc_neighbor_matrix(self, kernel):
+        b, g, r = cv2.split(self.new_img)
+        neighbor_matrix = (np.absolute(cv2.filter2D(b, -1, kernel=kernel)) 
+                           + np.absolute(cv2.filter2D(g, -1, kernel=kernel)) 
+                           + np.absolute(cv2.filter2D(r, -1, kernel=kernel)))
+        return neighbor_matrix
 
     @jit
     def get_minimum_seam(self, emap):
@@ -56,7 +92,7 @@ class SeamCarving:
             np.array(h): a minimum energy seam of energy map
         """
         # Generate seam map
-        smap = self.gen_smap(emap) 
+        smap = self.calc_forward_emap(emap) 
         
         # Get seam
         seam = []
@@ -233,7 +269,7 @@ class SeamCarving:
         imageio.mimsave(save_path, frames)
         print("Completed process.gif creating at {0}".format(save_path))
         
-    def get_mask(self):
+    def get_mask(self, desc='Seam Carving'):
         """
         This function display image for user to choose areas which they want to delete.
         Args:
@@ -251,7 +287,7 @@ class SeamCarving:
             temp_img = cv2.cvtColor(cv2.resize(self.img, (w//2, h//2)), cv2.COLOR_BGR2RGB)
         rotated_img = np.rot90(temp_img)
 
-        pygame.display.set_caption("Seam Carving")
+        pygame.display.set_caption(desc)
         window = pygame.display.set_mode((rotated_img.shape[0], rotated_img.shape[1]))
         background_surf = pygame.surfarray.make_surface(rotated_img).convert()
         background_surf = pygame.transform.flip(background_surf, True, False)
