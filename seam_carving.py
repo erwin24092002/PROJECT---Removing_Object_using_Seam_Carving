@@ -17,9 +17,9 @@ class SeamCarving:
         self.new_img = img.copy() 
         self.isgray = len(img.shape) == 2
         self.sliders = []  
-        self.kernel_x = np.array([[0., 0., 0.], [-1., 0., 1.], [0., 0., 0.]], dtype=np.float64)
-        self.kernel_y_left = np.array([[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]], dtype=np.float64)
-        self.kernel_y_right = np.array([[0., 0., 0.], [1., 0., 0.], [0., -1., 0.]], dtype=np.float64)
+        self.u_kernel = np.array([[0., 0., 0.], [-1., 0., 1.], [0., 0., 0.]], dtype=np.float64)
+        self.l_kernel = np.array([[0., 1., 0.], [-1., 0., 0.], [0., 0., 0.]], dtype=np.float64)
+        self.r_kernel = np.array([[0., 1., 0.], [0., 0., 1.], [0., 0., 0.]], dtype=np.float64)
     
     @jit
     def gen_emap(self):
@@ -52,36 +52,39 @@ class SeamCarving:
 
     @jit
     def calc_forward_emap(self, emap):
-        matrix_x = self.calc_neighbor_matrix(self.kernel_x)
-        matrix_y_left = self.calc_neighbor_matrix(self.kernel_y_left)
-        matrix_y_right = self.calc_neighbor_matrix(self.kernel_y_right)
-
+        under_forward_diff = self.calc_forward_diff(self.u_kernel)
+        left_forward_diff = self.calc_forward_diff(self.l_kernel)
+        right_forward_diff = self.calc_forward_diff(self.r_kernel)
         h, w = emap.shape
         femap = emap.copy()
         for row in range(1, h):
             for col in range(w):
                 if col == 0:
-                    e_right = femap[row - 1, col + 1] + matrix_x[row - 1, col + 1] + matrix_y_right[row - 1, col + 1]
-                    e_up = femap[row - 1, col] + matrix_x[row - 1, col]
-                    femap[row, col] = emap[row, col] + min(e_right, e_up)
+                    r_cost = femap[row - 1, col + 1] + under_forward_diff[row - 1, col + 1] + right_forward_diff[row - 1, col + 1]
+                    u_cost = femap[row - 1, col] + under_forward_diff[row - 1, col]
+                    femap[row, col] = femap[row, col] + min(r_cost, u_cost)
                 elif col == w - 1:
-                    e_left = femap[row - 1, col - 1] + matrix_x[row - 1, col - 1] + matrix_y_left[row - 1, col - 1]
-                    e_up = femap[row - 1, col] + matrix_x[row - 1, col]
-                    femap[row, col] = emap[row, col] + min(e_left, e_up)
+                    l_cost = femap[row - 1, col - 1] + under_forward_diff[row - 1, col - 1] + left_forward_diff[row - 1, col - 1]
+                    u_cost = femap[row - 1, col] + under_forward_diff[row - 1, col]
+                    femap[row, col] = femap[row, col] + min(l_cost, u_cost)
                 else:
-                    e_left = femap[row - 1, col - 1] + matrix_x[row - 1, col - 1] + matrix_y_left[row - 1, col - 1]
-                    e_right = femap[row - 1, col + 1] + matrix_x[row - 1, col + 1] + matrix_y_right[row - 1, col + 1]
-                    e_up = femap[row - 1, col] + matrix_x[row - 1, col]
-                    femap[row, col] = emap[row, col] + min(e_left, e_right, e_up)
+                    l_cost = femap[row - 1, col - 1] + under_forward_diff[row - 1, col - 1] + left_forward_diff[row - 1, col - 1]
+                    r_cost = femap[row - 1, col + 1] + under_forward_diff[row - 1, col + 1] + right_forward_diff[row - 1, col + 1]
+                    u_cost = femap[row - 1, col] + under_forward_diff[row - 1, col]
+                    femap[row, col] = femap[row, col] + min(l_cost, r_cost, u_cost)
         return femap
     
     @jit
-    def calc_neighbor_matrix(self, kernel):
-        b, g, r = cv2.split(self.new_img)
-        neighbor_matrix = (np.absolute(cv2.filter2D(b, -1, kernel=kernel)) 
-                           + np.absolute(cv2.filter2D(g, -1, kernel=kernel)) 
-                           + np.absolute(cv2.filter2D(r, -1, kernel=kernel)))
-        return neighbor_matrix
+    def calc_forward_diff(self, kernel):
+        forward_diff = 0
+        if self.isgray:
+            forward_diff = np.absolute(cv2.filter2D(self.new_img, -1, kernel)) 
+        else:
+            b, g, r = cv2.split(self.new_img)
+            forward_diff = (np.absolute(cv2.filter2D(b, -1, kernel)) 
+                            + np.absolute(cv2.filter2D(g, -1, kernel)) 
+                            + np.absolute(cv2.filter2D(r, -1, kernel)))
+        return forward_diff
 
     @jit
     def get_minimum_seam(self, emap):
