@@ -1,1 +1,1 @@
-# DEMO
+# Removing Object using Seam Carving
