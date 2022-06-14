@@ -19,30 +19,35 @@ class SeamCarving:
         self.sliders = []  
         self.u_kernel = np.array([[0., 0., 0.], [-1., 0., 1.], [0., 0., 0.]], dtype=np.float64)
         self.l_kernel = np.array([[0., 1., 0.], [-1., 0., 0.], [0., 0., 0.]], dtype=np.float64)
-        self.r_kernel = np.array([[0., 1., 0.], [0., 0., 1.], [0., 0., 0.]], dtype=np.float64)
+        self.r_kernel = np.array([[0., 1., 0.], [0., 0., -1.], [0., 0., 0.]], dtype=np.float64)
     
     @jit
+    # Seam Carving
+    # def gen_emap(self):
+    #     Gx = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=1, mode='wrap')
+    #     Gy = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=0, mode='wrap')
+    #     return (np.sum(np.abs(Gx), axis=2) + np.sum(np.abs(Gy), axis=2)).astype(np.uint8) 
+    
+    # Canny
     def gen_emap(self):
-        """Generate an energy map using Gradient magnitude
-        Args:
-        Returns:
-            np.array: an energy map (emap) of input image 
-        """
-        Gx = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=1, mode='wrap')
-        Gy = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=0, mode='wrap')
-        if self.isgray:
-            return np.sqrt(Gx**2 + Gy**2)
-        else:
-            return np.sqrt(np.sum(Gx**2, axis=2) + np.sum(Gy**2, axis=2))
+        return cv2.Canny(self.new_img, 100, 200)
+    
+    # Self
+    # def gen_emap(self):
+    #     """Generate an energy map using Gradient magnitude
+    #     Args:
+    #     Returns:
+    #         np.array: an energy map (emap) of input image 
+    #     """
+    #     Gx = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=1, mode='wrap')
+    #     Gy = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=0, mode='wrap')
+    #     if self.isgray:
+    #         return np.sqrt(Gx**2 + Gy**2)
+    #     else:
+    #         return np.sqrt(np.sum(Gx**2, axis=2) + np.sum(Gy**2, axis=2))
 
     @jit
     def calc_backward_emap(self, emap):
-        """Generate an seam map from energy map
-        Args:
-            np.array(h, w): an energy map
-        Returns:
-            np.array(h, w): an seam map (bemap) of input energy map 
-        """ 
         h, w = emap.shape 
         bemap = emap.copy()
         for row in range(1, h):
@@ -88,11 +93,12 @@ class SeamCarving:
 
     @jit
     def get_minimum_seam(self, emap):
-        """Get a minimum energy seam from emap
+        """
+        This function get a minimum energy seam from emap
         Input: 
-            np.array(h x w): a energy map
+            np.array (np.array h.w): a energy map
         Function return:
-            np.array(h): a minimum energy seam of energy map
+            np.array (np.array h): a minimum energy seam of energy map
         """
         # Generate seam map
         smap = self.calc_forward_emap(emap) 
@@ -112,10 +118,11 @@ class SeamCarving:
     @jit
     def remove_seam(self, seam):
         """
-        Input:
-            arr(h) - a seam 
-        Function return:
-            arr(h x w x c) - an image with the deleted seam 
+        This function removes the pixels specified by the seam line on the image 
+        Args:
+            seam (np.array h): seam line specifies the location of pixels to delete
+        Returns:
+            new_img (np.array h.(w-1)): the image after remove seam line
         """
         h, w = self.new_img.shape[0:2]
         new_img = 0
@@ -131,6 +138,13 @@ class SeamCarving:
     
     @jit
     def remove_seam_on_mask(self, seam, mask):
+        """
+        This function removes the pixels specified by the seam line on the mask 
+        Args:
+            seam (np.array h): seam line specifies the location of pixels to delete
+        Returns:
+            new_img (np.array h.(w-1)): the mask after remove seam line
+        """
         h, w = mask.shape 
         new_mask = np.zeros(shape=(h, w-1))
         for row in range(0, h):
@@ -142,10 +156,11 @@ class SeamCarving:
     @jit
     def insert_seam(self, seam):
         """
-        Input:
-            arr(h) - a seam 
-        Function return:
-            arr(h x w x c) - an image with the inserted seam 
+        This function will add a seam line equal to the average left and right pixels to the image 
+        Args:
+            seam (np.array h): seam line keeps pixel coordinates to be added
+        Returns:
+            new_img (np.array h.(w+1).c): the image after inserting seam line
         """
         h, w = self.new_img.shape[0:2] 
         new_img = 0
@@ -166,6 +181,15 @@ class SeamCarving:
         
     @jit
     def remove_object(self, removal_mask, protective_mask=None):
+        """
+        This function will find seam lines that pass through the pixels of the mask removal and avoid protective masks to remove.
+        Then record the necessary minimum seam lines and insert into the image to regain the original size
+        Args:
+            removal_mask (np.array h.w.c): the mask covers objects that need to be removed
+            [optional] protective_mask (np.array h.w.c): the mask covers objects that need to be protected. 
+        Returns:
+            new_img (np.array h.w.c): the image after the object is deleted
+        """
         self.removal_mask = removal_mask.copy()
         if protective_mask is not None:
             self.protective_mask = protective_mask.copy()
@@ -184,42 +208,46 @@ class SeamCarving:
             self.removal_mask = imutils.rotate_bound(self.removal_mask, angle=90)
             if protective_mask is not None:
                 self.protective_mask = imutils.rotate_bound(self.protective_mask, angle=90)
+           
+        tmp_dmask = dmask 
+        while(tmp_dmask>0):
+            dmask = min(tmp_dmask, 0.9*self.new_img.shape[1])
+            tmp_dmask -= dmask
+            for step in tqdm(range(dmask), desc='Removing Object'):
+                emap = self.gen_emap()
+                if protective_mask is not None:
+                    emap = np.where((self.protective_mask==255), 1000, emap)
+                emap = np.where((self.removal_mask==255), -1000, emap)
+                seam = self.get_minimum_seam(emap)
+                self.sliders.append(self.visual_seam(seam, color=REMOVAL_SEAM_COLOR))
+                if rotate_flag:
+                    self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
+                self.new_img = self.remove_seam(seam)
+                self.removal_mask = self.remove_seam_on_mask(seam, self.removal_mask)
+                if protective_mask is not None:
+                    self.protective_mask = self.remove_seam_on_mask(seam, self.protective_mask)
             
-        for step in tqdm(range(dmask), desc='Removing Object'):
-            emap = self.gen_emap()
-            if protective_mask is not None:
-                emap = np.where((self.protective_mask==255), 1000, emap)
-            emap = np.where((self.removal_mask==255), -1000, emap)
-            seam = self.get_minimum_seam(emap)
-            self.sliders.append(self.visual_seam(seam, color=REMOVAL_SEAM_COLOR))
-            if rotate_flag:
-                self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
-            self.new_img = self.remove_seam(seam)
-            self.removal_mask = self.remove_seam_on_mask(seam, self.removal_mask)
-            if protective_mask is not None:
-                self.protective_mask = self.remove_seam_on_mask(seam, self.protective_mask)
-        
-        # Regaining orginal size    
-        temp_img = self.new_img.copy()
-        seam_record = []
-        for step in tqdm(range(dmask), desc='Colecting Seams for Insertion'):
-            emap = self.gen_emap()
-            if protective_mask is not None:
-                emap = np.where((self.protective_mask==255), 1000, emap)
-            seam = self.get_minimum_seam(emap)
-            seam_record.append(seam)
-            self.new_img = self.remove_seam(seam)
-            if protective_mask is not None:
-                self.protective_mask = self.remove_seam_on_mask(seam, self.protective_mask)
-            
-        self.new_img = temp_img.copy()
-        for step in tqdm(range(dmask), desc='Regaining Original Size'):
-            seam = seam_record.pop(0)
-            self.new_img = self.insert_seam(seam)
-            self.sliders.append(self.visual_seam(seam, color=INSERTED_SEAM_COLOR))
-            if rotate_flag:
-                self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
-            seam_record = self.update_seam_record(seam_record, seam)
+            # Regaining orginal size    
+            temp_img = self.new_img.copy()
+            seam_record = []
+            for step in tqdm(range(dmask), desc='Colecting Seams for Insertion'):
+                emap = self.gen_emap()
+                if protective_mask is not None:
+                    emap = np.where((self.protective_mask==255), 1000, emap)
+                seam = self.get_minimum_seam(emap)
+                seam_record.append(seam)
+                self.new_img = self.remove_seam(seam)
+                if protective_mask is not None:
+                    self.protective_mask = self.remove_seam_on_mask(seam, self.protective_mask)
+                
+            self.new_img = temp_img.copy()
+            for step in tqdm(range(dmask), desc='Regaining Original Size'):
+                seam = seam_record.pop(0)
+                self.new_img = self.insert_seam(seam)
+                self.sliders.append(self.visual_seam(seam, color=INSERTED_SEAM_COLOR))
+                if rotate_flag:
+                    self.sliders[len(self.sliders)-1] = imutils.rotate_bound(self.sliders[len(self.sliders)-1], angle=-90)
+                seam_record = self.update_seam_record(seam_record, seam)
         
         if rotate_flag: 
             self.new_img = imutils.rotate_bound(self.new_img, angle=-90)
@@ -228,6 +256,14 @@ class SeamCarving:
     
     @jit
     def update_seam_record(self, seam_record, seamm):
+        """
+        This function will correct the color at the seam location specified to color 
+        Args:
+            seam_record (np.array): seam line storage set to be added to the picture 
+            seamm (np.array): the seam has just been removed.
+        Returns:
+            new_record (np.array): the record with updated seams
+        """
         new_record = []
         for seam in seam_record:
             seam[np.where(seam>=seamm)] += 2 
@@ -237,10 +273,12 @@ class SeamCarving:
     @jit
     def visual_seam(self, seam, color=REMOVAL_SEAM_COLOR):
         """
-        Input:
-            arr(h) - a seam 
-        Function return:
-            arr(h x w x c) - an image with the seam line colored
+        This function will correct the color at the seam location specified to color 
+        Args:
+            seam (np.array h): set horizontal coordinates corresponding to each line from the top down
+            color (np.array): color
+        Returns:
+            img (np.array h.w.c): photo after being painted seam line
         """
         if self.isgray:
             color = 0
@@ -252,9 +290,10 @@ class SeamCarving:
     
     def visual_process(self, save_path=''):
         """
-        Input:
-            link to save process.gif file
-        Function collects processing states stored in self.sliders to form a .gif file and save it at save_path
+        This function takes all the states of the collected image to form a gif file that describes the processing
+        Args:
+            save_path (string): path to the storage place
+        Returns:
         """
         print("Waiting for Visualizing Process...")
         h, w = self.img.shape[0:2] 
@@ -274,20 +313,22 @@ class SeamCarving:
         
     def get_mask(self, desc='Seam Carving'):
         """
-        This function display image for user to choose areas which they want to delete.
+        This function display image for user to choose areas which they want to apply mask.
         Args:
-            img: Input image. Defaults to None.
+            img (np.array h.w.c): an image
         Returns:
-            mask: 2D Binary mask. 
+            mask (np.array h.w): 2D mask (mask in {0, 255}) 
         """
         pygame.init()
         
         h, w = self.img.shape[0:2]
+        k = h / w
+        win_w = 1000
         temp_img = 0
         if self.isgray:
-            temp_img = cv2.cvtColor(cv2.resize(self.img, (w//2, h//2)), cv2.COLOR_GRAY2RGB)
+            temp_img = cv2.cvtColor(cv2.resize(self.img, (int(win_w), int(win_w*k))), cv2.COLOR_GRAY2RGB)
         else:
-            temp_img = cv2.cvtColor(cv2.resize(self.img, (w//2, h//2)), cv2.COLOR_BGR2RGB)
+            temp_img = cv2.cvtColor(cv2.resize(self.img, (int(win_w), int(win_w*k))), cv2.COLOR_BGR2RGB)
         rotated_img = np.rot90(temp_img)
 
         pygame.display.set_caption(desc)
@@ -329,3 +370,8 @@ class SeamCarving:
             window.blit(background_surf, (0, 0))
             pygame.display.update()
             clock.tick(fps)
+    
+            
+        
+            
+        
