@@ -65,16 +65,16 @@ class SeamCarving:
         for row in range(1, h):
             for col in range(w):
                 if col == 0:
-                    r_cost = femap[row - 1, col + 1] + under_forward_diff[row - 1, col + 1] + right_forward_diff[row - 1, col + 1]
+                    r_cost = femap[row - 1, col + 1] + under_forward_diff[row - 1, col] + right_forward_diff[row - 1, col + 1]
                     u_cost = femap[row - 1, col] + under_forward_diff[row - 1, col]
                     femap[row, col] = femap[row, col] + min(r_cost, u_cost)
                 elif col == w - 1:
-                    l_cost = femap[row - 1, col - 1] + under_forward_diff[row - 1, col - 1] + left_forward_diff[row - 1, col - 1]
+                    l_cost = femap[row - 1, col - 1] + under_forward_diff[row - 1, col] + left_forward_diff[row - 1, col - 1]
                     u_cost = femap[row - 1, col] + under_forward_diff[row - 1, col]
                     femap[row, col] = femap[row, col] + min(l_cost, u_cost)
                 else:
-                    l_cost = femap[row - 1, col - 1] + under_forward_diff[row - 1, col - 1] + left_forward_diff[row - 1, col - 1]
-                    r_cost = femap[row - 1, col + 1] + under_forward_diff[row - 1, col + 1] + right_forward_diff[row - 1, col + 1]
+                    l_cost = femap[row - 1, col - 1] + under_forward_diff[row - 1, col] + left_forward_diff[row - 1, col - 1]
+                    r_cost = femap[row - 1, col + 1] + under_forward_diff[row - 1, col] + right_forward_diff[row - 1, col + 1]
                     u_cost = femap[row - 1, col] + under_forward_diff[row - 1, col]
                     femap[row, col] = femap[row, col] + min(l_cost, r_cost, u_cost)
         return femap
