@@ -17,7 +17,7 @@ class SeamCarving:
         self.new_img = img.copy() 
         self.isgray = len(img.shape) == 2
         self.sliders = []  
-        self.u_kernel = np.array([[0., 0., 0.], [-1., 0., 1.], [0., 0., 0.]], dtype=np.float64)
+        self.u_kernel = np.array([[0., 0., 0.], [0., 0., 0.], [1., 0., -1.]], dtype=np.float64)
         self.l_kernel = np.array([[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]], dtype=np.float64)
         self.r_kernel = np.array([[0., 0., 0.], [1., 0., 0.], [0., -1., 0.]], dtype=np.float64)
     
