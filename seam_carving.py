@@ -18,11 +18,11 @@ class SeamCarving:
         self.isgray = len(img.shape) == 2
         self.sliders = []  
         self.u_kernel = np.array([[0., 0., 0.], [-1., 0., 1.], [0., 0., 0.]], dtype=np.float64)
-        self.l_kernel = np.array([[0., 1., 0.], [-1., 0., 0.], [0., 0., 0.]], dtype=np.float64)
-        self.r_kernel = np.array([[0., 1., 0.], [0., 0., -1.], [0., 0., 0.]], dtype=np.float64)
+        self.l_kernel = np.array([[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]], dtype=np.float64)
+        self.r_kernel = np.array([[0., 0., 0.], [1., 0., 0.], [0., -1., 0.]], dtype=np.float64)
     
     @jit
-    # Seam Carving
+    # Based energy Seam Carving
     # def gen_emap(self):
     #     Gx = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=1, mode='wrap')
     #     Gy = ndi.convolve1d(self.new_img, np.array([1, 0, -1]), axis=0, mode='wrap')
